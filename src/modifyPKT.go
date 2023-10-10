@@ -25,6 +25,7 @@ func main() {
 var (
 	pcapFile = "C:/Users/17444/Downloads/test.pcap"
 	pktHandle *pcap.Handle
+	options gopacket.SerializeOptions
 )
 
 func test1() {
@@ -39,7 +40,8 @@ func test1() {
 
 	for packet := range pktSource.Packets() {
 		//fmt.Println(packet)
-		showPacket(packet)
+		//showPacket(packet)
+		modifyPKT(packet)
 	}
 }
 
@@ -55,6 +57,56 @@ func showPacket(pkt gopacket.Packet) {
 		ipL2, _ := L2.(*layers.IPv4)
 		fmt.Printf("%v \n\n", ipL2)
 	}
+
+	L3 := pkt.Layer(layers.LayerTypeTCP)
+	if L3 != nil {
+		tcpL3, _ := L3.(*layers.TCP)
+		fmt.Printf("%v \n\n", tcpL3)
+	}
+
+	L4 := pkt.ApplicationLayer()
+	if L4 != nil {
+		fmt.Printf("%v \n\n", L4.Payload())
+	} else {
+		fmt.Printf("L4 == NULL \n\n")
+	}
+}
+
+func modifyPKT(pkt gopacket.Packet) {
+	var ethernetL1 *layers.Ethernet
+	var ipL2 *layers.IPv4
+	var tcpL3 *layers.TCP
+
+	L1 := pkt.Layer(layers.LayerTypeEthernet)
+	if L1 != nil {
+		ethernetL1, _ = L1.(*layers.Ethernet)
+	} else {
+		ethernetL1 = nil
+	}
+
+	L2 := pkt.Layer(layers.LayerTypeIPv4)
+	if L2 != nil {
+		ipL2, _ = L2.(*layers.IPv4)
+	} else {
+		ipL2 = nil
+	}
+
+	L3 := pkt.Layer(layers.LayerTypeTCP)
+	if L3 != nil {
+		tcpL3, _ = L3.(*layers.TCP)
+	} else {
+		tcpL3 = nil
+	}
+
+	newPkt := gopacket.NewSerializeBuffer()
+	gopacket.SerializeLayers(
+		newPkt, options,
+		ethernetL1,
+		ipL2,
+		tcpL3,
+		nil,
+	)
+
 }
 
 
