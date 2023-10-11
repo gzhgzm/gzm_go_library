@@ -1,5 +1,9 @@
 package main
 
+/**
+ * 修改数据包中的单个字段值, 或整层字段值的修改
+ */
+
 import (
 	"common"
 	"fmt"
