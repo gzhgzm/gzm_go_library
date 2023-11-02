@@ -6,9 +6,11 @@ package main
 
 import (
 	"common"
+	"flag"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -29,8 +31,10 @@ func main() {
 }
 
 var (
-	pcapFile = "C:/Users/17444/Downloads/test.pcap"
-	newPcapFile = "C:/Users/17444/Downloads/test1.pcap"
+	fPathName = flag.String("f", "", "需要修改的pcap文件") 
+	pcapFile string
+	newPcapFile string
+	
 	pktHandle *pcap.Handle
 	options gopacket.SerializeOptions
 
@@ -40,6 +44,21 @@ var (
 )
 
 func test1() {
+	flag.Parse()
+	if *fPathName == "" {
+		os.Exit(1)
+	}
+
+	pcapFile = *fPathName
+	dirpath, filename := filepath.Split(pcapFile)
+	filesuff := filepath.Ext(filename)
+	filebase := filename[0 : len(filename) - len(filesuff)]
+	newPcapFile = dirpath + filebase + "_new" + filesuff
+
+	modifyPKTProcess()
+}
+
+func modifyPKTProcess() {
 	pktHandle, err := pcap.OpenOffline(pcapFile)
 	if err != nil {
 		fmt.Println(err)
@@ -66,7 +85,7 @@ func test1() {
 		if i == 0 {
 			setC2S(packet)
 		}
-		modifyPKT(packet, w)
+		modifyPKT(packet, w, i)
 		i++
 	}
 }
@@ -81,61 +100,65 @@ func setC2S(pkt gopacket.Packet) {
 	}
 }
 
-func modifyPKT(pkt gopacket.Packet, w *pcapgo.Writer) {
-	var ethernetL1 *layers.Ethernet
-	var ipL2 *layers.IPv4
-	var tcpL3 *layers.TCP
+func modifyPKT(pkt gopacket.Packet, w *pcapgo.Writer, i int) {
+	var eL1 *layers.Ethernet
+	var iL2 *layers.IPv4
+	var tL3 *layers.TCP
+	
+	var ethernetL1 []byte
+	var ipL2 []byte
+	var tcpL3 []byte
 	var appL4 []byte
+	var outData []byte
 
-	L2 := pkt.Layer(layers.LayerTypeIPv4)
-	if L2 != nil {
-		ipL2, _ = L2.(*layers.IPv4)
-	} else {
-		ipL2 = nil
+	fmt.Printf("packet(%d) \n", i)
+
+	L4 := pkt.ApplicationLayer()
+	if L4 != nil {
+		appL4 = L4.Payload()
 	}
 
 	L3 := pkt.Layer(layers.LayerTypeTCP)
 	if L3 != nil {
-		tcpL3, _ = L3.(*layers.TCP)
-	} else {
-		tcpL3 = nil
+		tL3, _ = L3.(*layers.TCP)
+		tcpL3 = tL3.BaseLayer.Contents
+	}
+
+	L2 := pkt.Layer(layers.LayerTypeIPv4)
+	if L2 != nil {
+		iL2, _ = L2.(*layers.IPv4)
+		ipL2 = iL2.BaseLayer.Contents
 	}
 
 	L1 := pkt.Layer(layers.LayerTypeEthernet)
 	if L1 != nil {
-		ethernetL1, _ = L1.(*layers.Ethernet)
+		eL1 = L1.(*layers.Ethernet)
+		ethernetL1 = eL1.BaseLayer.Contents
 	} else {
 		var smac net.HardwareAddr
 		var dmac net.HardwareAddr
 		
-		if srcPort == tcpL3.SrcPort {
+		if srcPort == tL3.SrcPort {
 			smac, dmac = mac1, mac2
 		} else {
 			smac, dmac = mac2, mac1
 		}
 
-		ethernetL1 = &layers.Ethernet{
-			EthernetType: 0x0800,
-			SrcMAC:       smac,
-			DstMAC:       dmac,
-		}
+		ethernetL1 = append(ethernetL1, dmac...)
+		ethernetL1 = append(ethernetL1, smac...)
+		ethernetL1 = append(ethernetL1, []byte{0x08, 0x00}...)
+		//fmt.Printf("ethernetL1(%d) %v \n", len(ethernetL1), ethernetL1)
 	}
-
-	newPkt := gopacket.NewSerializeBuffer()
-	gopacket.SerializeLayers(
-		newPkt, options,
-		ethernetL1,
-		ipL2,
-		tcpL3,
-		gopacket.Payload(appL4),
-	)
-
-	outData := newPkt.Bytes()
+	
+	outData = append(outData, ethernetL1...)
+	outData = append(outData, ipL2...)
+	outData = append(outData, tcpL3...)
+	outData = append(outData, appL4...)
 	//fmt.Printf("len(%d) %v \n\n", len(outData), outData)
 
 	ci := gopacket.CaptureInfo{
 		Timestamp:     pkt.Metadata().CaptureInfo.Timestamp,
-		Length:        65535,
+		Length:        len(outData),
 		CaptureLength: len(outData),
 	}
 
