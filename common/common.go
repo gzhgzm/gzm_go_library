@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+func UserHomeDir() string {
+	home := os.Getenv("HOME") // Unix
+	if home == "" {           // Windows
+		home = os.Getenv("USERPROFILE")
+	}
+	return home
+}
+
 // 获取字符串中指定的子串
 //  @param pattern 	正则匹配公式
 //  @param s 		匹配串
