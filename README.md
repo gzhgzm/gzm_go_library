@@ -9,6 +9,8 @@
 
 > 库测试样例：https://github.com/twgh/xcgui-example/
 
+> 在线帮助文档：http://www.xcgui.com/doc-ui
+
 ## 1.1 路径
 ```
 1. 下载库api接口
